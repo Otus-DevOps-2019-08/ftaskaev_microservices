@@ -154,3 +154,91 @@ $ docker push sumkinstein/otus-reddit:1.0
 ```console
 $ docker run --name reddit -d --network=host sumkinstein/otus-reddit:1.0
 ```
+
+## Lesson 16: homework 13
+Docker: Разбиение приложения на несколько микросервисов. Выбор базового образа. Подключение volume к контейнеру.  
+PR: [Otus-DevOps-2019-08/ftaskaev_microservices#2](https://github.com/Otus-DevOps-2019-08/ftaskaev_microservices/pull/2)
+
+Собираем образы:
+
+```console
+$ docker build -t sumkinstein/post:1.0 ./post-py
+$ docker build -t sumkinstein/comment:1.0 ./comment
+$ docker build -t sumkinstein/ui:1.0 ./ui
+```
+
+При сборке образа ui используется кеш от предыдущей сборки:
+
+```console
+$ docker build -t sumkinstein/comment:1.0 ./comment
+Sending build context to Docker daemon  14.85kB
+Step 1/11 : FROM ruby:2.2
+ ---> 6c8e6f9667b2
+Step 2/11 : RUN apt-get update -qq && apt-get install -y build-essential
+ ---> 364261c482c4
+Step 3/11 : ENV APP_HOME /app
+ ---> f383419fb60c
+Step 4/11 : RUN mkdir $APP_HOME
+ ---> 2cb6a2cc83ac
+Step 5/11 : WORKDIR $APP_HOME
+ ---> f524c26183d6
+```
+```console
+$ docker build -t sumkinstein/ui:1.0 ./ui
+Sending build context to Docker daemon  30.72kB
+Step 1/13 : FROM ruby:2.2
+ ---> 6c8e6f9667b2
+Step 2/13 : RUN apt-get update -qq && apt-get install -y build-essential
+ ---> Using cache
+ ---> 364261c482c4
+Step 3/13 : ENV APP_HOME /app
+ ---> Using cache
+ ---> f383419fb60c
+Step 4/13 : RUN mkdir $APP_HOME
+ ---> Using cache
+ ---> 2cb6a2cc83ac
+Step 5/13 : WORKDIR $APP_HOME
+ ---> Using cache
+ ---> f524c26183d6
+```
+
+### Дополнительное задание #1
+
+При запуске контейнера можно переопределить переменные, заданные в Dockerfile.  
+Запустим mongo с `--network-alias=puma_db` и при запуске остальных контейнеров переопределим переменные, хранящие адрес сервера БД:
+
+```console
+docker run -d --network=reddit --network-alias=reddit_db mongo:latest
+docker run -d --network=reddit --network-alias=post -e POST_DATABASE_HOST=reddit_db sumkinstein/post:1.0
+docker run -d --network=reddit --network-alias=comment -e COMMENT_DATABASE_HOST=reddit_db sumkinstein/comment:1.0
+```
+
+### Дополнительное задание #2
+
+Используя в качестве базового образ `ruby:2.2-alpine` итоговый образ уменьшился до ~300MB:
+
+```console
+$ docker images
+REPOSITORY            TAG                 IMAGE ID            CREATED              SIZE
+sumkinstein/comment   3.0                 59c0d38f254a        4 seconds ago        305MB
+sumkinstein/ui        3.0                 a03eb25462e6        About a minute ago   308MB
+sumkinstein/comment   2.0                 6dae48d0587a        About an hour ago    456MB
+sumkinstein/ui        2.0                 2e75a60f2b30        About an hour ago    459MB
+sumkinstein/comment   1.0                 0a7ad278f1b3        2 hours ago          782MB
+sumkinstein/ui        1.0                 4919b19e441e        2 hours ago          784MB
+```
+
+### Docker volumes
+
+Создаём volume:
+
+```console
+$ docker volume create reddit_db
+```
+
+Запускаем контейнер с подключенным volume:
+
+```console
+$ docker run -d --network=reddit --network-alias=reddit_db -v reddit_db:/data/db mongo:latest
+```
+
